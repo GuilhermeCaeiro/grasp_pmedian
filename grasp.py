@@ -75,6 +75,8 @@ class GRASP:
 
         finish_time = time.time()
         
+        print("Total time for {} iterations was {}.".format(self.max_iterations, finish_time - start_time))
+
         solution_payload = {
             "seed": self.seed,
             "solution": self.best_solution,
