@@ -8,6 +8,7 @@ import copy
 import operator
 import matplotlib.pyplot as plt
 import seaborn as sns
+import multiprocessing
 
 class Solution:
     def __init__(self, solution, fitness):
@@ -15,7 +16,7 @@ class Solution:
         self.fitness = fitness
 
 class GRASP:
-    def __init__(self, instance, rcl_size, max_iterations, local_search_method, seed = 0):
+    def __init__(self, instance, rcl_size, max_iterations, local_search_method, seed = 0, multiprocessed = False):
         self.instance = instance
         self.max_iterations = max_iterations
         self.rcl_size = rcl_size
@@ -25,6 +26,7 @@ class GRASP:
         self.solutions = []
         self.elite = []
         self.seed = seed
+        self.multiprocessed = multiprocessed
 
         random.seed(self.seed)
         np.random.seed(self.seed)
@@ -45,9 +47,6 @@ class GRASP:
         #print(p_costs, penalty)
         
         return p_costs + penalty
-
-    def fitness_change(self, original_solution, to_one, to_zero):
-        pass
 
     def loop(self):
         start_time = time.time()
@@ -86,6 +85,31 @@ class GRASP:
 
         return solution_payload
 
+    def evaluate_locations(self, candidate_locations, partial_solution):
+        sol_plus_fitness_times = []
+        candidate_solutions = []
+
+        for candidate_location in candidate_locations:
+            candidate_solution = partial_solution + [candidate_location]
+            #candidate_solution = np.zeros((instance.n_candidate_locations, 1))
+            #candidate_solution[partial] = 1
+            stime = time.time()
+            candidate_solution = Solution(candidate_solution, self.fitness(candidate_solution))
+            sol_plus_fitness_times.append(time.time() - stime)
+            candidate_solution.candidate_location = candidate_location # created a new attribute just to store this vale
+
+            candidate_solutions.append(candidate_solution)
+        
+        return candidate_solutions, sol_plus_fitness_times
+
+    def multiprocessed_evaluate_locations(self, process_id, results, candidate_locations, partial_solution):
+        candidate_solutions, sol_plus_fitness_times = self.evaluate_locations(candidate_locations, partial_solution)
+        results[process_id] = {
+            "candidate_solutions": candidate_solutions,
+            "sol_plus_fitness_times": sol_plus_fitness_times
+        }
+
+
     def greed_randomized_search(self, instance, rcl_size):
         start_time = time.time()
         candidate_locations = list(range(instance.n_candidate_locations))
@@ -95,16 +119,45 @@ class GRASP:
 
         for i in range(instance.p):
             candidate_solutions = []
-            for candidate_location in candidate_locations:
-                candidate_solution = partial_solution + [candidate_location]
-                #candidate_solution = np.zeros((instance.n_candidate_locations, 1))
-                #candidate_solution[partial] = 1
-                stime = time.time()
-                candidate_solution = Solution(candidate_solution, self.fitness(candidate_solution))
-                sol_plus_fitness_times.append(time.time() - stime)
-                candidate_solution.candidate_location = candidate_location # created a new attribute just to store this vale
 
-                candidate_solutions.append(candidate_solution)
+            if self.multiprocessed:
+                processes = []
+                manager = multiprocessing.Manager()
+                results = manager.dict()
+                
+                chuncks = []
+                number_of_chuncks = 4
+                locations_per_chunck = math.floor(len(candidate_locations) / number_of_chuncks)
+                for i in range(number_of_chuncks):
+                    if i != (number_of_chuncks - 1):
+                        chuncks.append(candidate_locations[(i * locations_per_chunck):(i * (locations_per_chunck + 1))])
+                    else:
+                        chuncks.append(candidate_locations[(i * locations_per_chunck):len(candidate_locations)])
+
+                for i in range(len(chuncks)):
+                    process = multiprocessing.Process(target=self.multiprocessed_evaluate_locations, args=(i, results, chuncks[i], partial_solution))
+                    processes.append(process)
+                    process.start()
+
+                for process in processes:
+                    process.join()
+
+                for process_id in sorted(results.keys()):
+                    candidate_solutions = candidate_solutions + results[process_id]["candidate_solutions"]
+                    sol_plus_fitness_times = sol_plus_fitness_times + results[process_id]["sol_plus_fitness_times"]
+                    
+            else:
+
+                for candidate_location in candidate_locations:
+                    candidate_solution = partial_solution + [candidate_location]
+                    #candidate_solution = np.zeros((instance.n_candidate_locations, 1))
+                    #candidate_solution[partial] = 1
+                    stime = time.time()
+                    candidate_solution = Solution(candidate_solution, self.fitness(candidate_solution))
+                    sol_plus_fitness_times.append(time.time() - stime)
+                    candidate_solution.candidate_location = candidate_location # created a new attribute just to store this vale
+
+                    candidate_solutions.append(candidate_solution)
 
             current_rcl_size = math.ceil(len(candidate_solutions) * rcl_size)
             rcl = sorted(candidate_solutions, key=operator.attrgetter("fitness"), reverse=False)[:current_rcl_size]
@@ -114,7 +167,7 @@ class GRASP:
             partial_solution = chosen.solution
         
         finish_time = time.time()
-        #print("GRS time", finish_time - start_time, "Total sol + fitness time", sum(sol_plus_fitness_times), "Average sol + fitness time", np.mean(sol_plus_fitness_times))
+        print("GRS time", finish_time - start_time, "Total sol + fitness time", sum(sol_plus_fitness_times), "Average sol + fitness time", np.mean(sol_plus_fitness_times))
         return chosen
 
                 
@@ -155,7 +208,7 @@ class GRASP:
                         return improved_solution
 
         finish_time = time.time()
-        #print("LS time", finish_time - start_time)
+        print("LS time", finish_time - start_time)
         return improved_solution
 
     def plot_solution_distribution(self):
@@ -218,7 +271,7 @@ class Instance:
 
 
 
-grasp = GRASP(Instance("pmed1.txt"), 0.5, 10000, "best_improvement")
+grasp = GRASP(Instance("pmed1.txt"), 0.5, 10000, "best_improvement", multiprocessed=True)
 results = grasp.loop()
 print(results["solution"].fitness)
 grasp.plot_solution_distribution()
