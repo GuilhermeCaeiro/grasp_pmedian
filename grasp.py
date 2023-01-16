@@ -60,13 +60,13 @@ class GRASP:
             
             # greedy randomized search
             solution = self.greed_randomized_search(self.instance, self.rcl_size)
-            #print("Initial solution", solution.fitness, sum(solution.solution))
+            #print("Initial solution", solution.fitness, sum(solution.solution), len(solution.solution))
             # local search
             solution = self.local_search(solution, self.local_search_method, self.instance)
             #print("Final solution", solution.fitness, sum(solution.solution))
 
             iteration_finish_time = time.time()
-            #print("It.", iteration, "solution:", solution.fitness)
+            #print("It.", iteration, "solution:", solution.fitness, len(solution.solution))
             
             if solution.fitness < self.best_solution.fitness:
                 self.best_solution = solution
@@ -111,10 +111,10 @@ class GRASP:
             chosen = random.choice(rcl)
             
             candidate_locations.remove(chosen.candidate_location)
-            partial_solution = list(np.where(chosen.solution == 1)[0])
+            partial_solution = chosen.solution
         
         finish_time = time.time()
-        print("GRS time", finish_time - start_time, "Total sol + fitness time", sum(sol_plus_fitness_times), "Average sol + fitness time", np.mean(sol_plus_fitness_times))
+        #print("GRS time", finish_time - start_time, "Total sol + fitness time", sum(sol_plus_fitness_times), "Average sol + fitness time", np.mean(sol_plus_fitness_times))
         return chosen
 
                 
@@ -125,6 +125,8 @@ class GRASP:
         #zeros = np.where(solution.solution == 0)[0]
         chosen_locations = solution.solution
         not_chosen_locations = [element for element in list(range(instance.n_candidate_locations)) if element not in chosen_locations]
+        #print(chosen_locations)
+        #print(not_chosen_locations)
         improved_solution = solution
 
         for chosen in chosen_locations:
@@ -153,7 +155,7 @@ class GRASP:
                         return improved_solution
 
         finish_time = time.time()
-        print("LS time", finish_time - start_time)
+        #print("LS time", finish_time - start_time)
         return improved_solution
 
     def plot_solution_distribution(self):
