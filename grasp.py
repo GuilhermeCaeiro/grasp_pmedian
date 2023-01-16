@@ -130,7 +130,7 @@ class GRASP:
                 locations_per_chunck = math.floor(len(candidate_locations) / number_of_chuncks)
                 for i in range(number_of_chuncks):
                     if i != (number_of_chuncks - 1):
-                        chuncks.append(candidate_locations[(i * locations_per_chunck):(i * (locations_per_chunck + 1))])
+                        chuncks.append(candidate_locations[(i * locations_per_chunck):((i + 1) * locations_per_chunck)])
                     else:
                         chuncks.append(candidate_locations[(i * locations_per_chunck):len(candidate_locations)])
 
@@ -271,7 +271,7 @@ class Instance:
 
 
 
-grasp = GRASP(Instance("pmed1.txt"), 0.5, 10000, "best_improvement", multiprocessed=True)
+grasp = GRASP(Instance("pmed10.txt"), 0.5, 10000, "best_improvement", multiprocessed=True)
 results = grasp.loop()
 print(results["solution"].fitness)
 grasp.plot_solution_distribution()
