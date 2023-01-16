@@ -6,6 +6,8 @@ import random
 import math
 import copy
 import operator
+import matplotlib.pyplot as plt
+import seaborn as sns
 
 class Solution:
     def __init__(self, solution, fitness):
@@ -27,7 +29,7 @@ class GRASP:
         random.seed(self.seed)
         np.random.seed(self.seed)
 
-    def fitness(self, solution):
+    def fitness_old(self, solution):
         p_costs = self.instance.costs[np.where(solution == 1)[0]]
         p_costs = sum(p_costs.min(axis = 0))
 
@@ -36,20 +38,35 @@ class GRASP:
         
         return p_costs + penalty
 
+    def fitness(self, solution):
+        p_costs = self.instance.costs[solution]
+        p_costs = sum(p_costs.min(axis = 0))
+        penalty = 100 * abs(self.instance.p - len(solution))
+        #print(p_costs, penalty)
+        
+        return p_costs + penalty
+
+    def fitness_change(self, original_solution, to_one, to_zero):
+        pass
+
     def loop(self):
         start_time = time.time()
 
         for iteration in range(0, self.max_iterations):
             iteration_start_time = time.time()
+            
+            if (iteration % 1000) == 0:
+                print("Iteration", iteration, "Time", time.time() - start_time)
+            
             # greedy randomized search
             solution = self.greed_randomized_search(self.instance, self.rcl_size)
-            print("Initial solution", solution.fitness, sum(solution.solution))
+            #print("Initial solution", solution.fitness, sum(solution.solution))
             # local search
-            solution = self.local_search(solution, self.local_search_method)
+            solution = self.local_search(solution, self.local_search_method, self.instance)
             #print("Final solution", solution.fitness, sum(solution.solution))
 
             iteration_finish_time = time.time()
-            print("It.", iteration, "solution:", solution.fitness)
+            #print("It.", iteration, "solution:", solution.fitness)
             
             if solution.fitness < self.best_solution.fitness:
                 self.best_solution = solution
@@ -70,17 +87,21 @@ class GRASP:
         return solution_payload
 
     def greed_randomized_search(self, instance, rcl_size):
+        start_time = time.time()
         candidate_locations = list(range(instance.n_candidate_locations))
         partial_solution = []
+        sol_plus_fitness_times = []
         chosen = None
 
         for i in range(instance.p):
             candidate_solutions = []
             for candidate_location in candidate_locations:
-                partial = partial_solution + [candidate_location]
-                candidate_solution = np.zeros((instance.n_candidate_locations, 1))
-                candidate_solution[partial] = 1
+                candidate_solution = partial_solution + [candidate_location]
+                #candidate_solution = np.zeros((instance.n_candidate_locations, 1))
+                #candidate_solution[partial] = 1
+                stime = time.time()
                 candidate_solution = Solution(candidate_solution, self.fitness(candidate_solution))
+                sol_plus_fitness_times.append(time.time() - stime)
                 candidate_solution.candidate_location = candidate_location # created a new attribute just to store this vale
 
                 candidate_solutions.append(candidate_solution)
@@ -92,17 +113,22 @@ class GRASP:
             candidate_locations.remove(chosen.candidate_location)
             partial_solution = list(np.where(chosen.solution == 1)[0])
         
+        finish_time = time.time()
+        print("GRS time", finish_time - start_time, "Total sol + fitness time", sum(sol_plus_fitness_times), "Average sol + fitness time", np.mean(sol_plus_fitness_times))
         return chosen
 
                 
 
-    def local_search(self, solution, local_search_method):
-        ones = np.where(solution.solution == 1)[0]
-        zeros = np.where(solution.solution == 0)[0]
+    def local_search(self, solution, local_search_method, instance):
+        start_time = time.time()
+        #ones = np.where(solution.solution == 1)[0]
+        #zeros = np.where(solution.solution == 0)[0]
+        chosen_locations = solution.solution
+        not_chosen_locations = [element for element in list(range(instance.n_candidate_locations)) if element not in chosen_locations]
         improved_solution = solution
 
-        for one in ones:
-            for zero in zeros:
+        for chosen in chosen_locations:
+            for not_chosen in not_chosen_locations:
                 candidate_solution = copy.deepcopy(solution.solution)
                 #print(one, zero)
                 #print(ones)
@@ -110,8 +136,11 @@ class GRASP:
                 #print("\n\n\n")
                 #print(candidate_solution)
 
-                candidate_solution[one] = 0
-                candidate_solution[zero] = 1
+                #candidate_solution[one] = 0
+                #candidate_solution[zero] = 1
+                candidate_solution.remove(chosen)
+                candidate_solution.append(not_chosen)
+                
                 #print(candidate_solution)
                 #exit()
 
@@ -123,9 +152,22 @@ class GRASP:
                     if local_search_method == "first_improvement":
                         return improved_solution
 
-        
+        finish_time = time.time()
+        print("LS time", finish_time - start_time)
         return improved_solution
 
+    def plot_solution_distribution(self):
+        plot = sns.distplot(
+            [solution.fitness for solution in self.solutions], 
+            hist=True, 
+            kde=False, 
+            bins=int(100), 
+            color = 'blue',
+            hist_kws={'edgecolor':'black'}
+        )
+
+        figure = plot.get_figure()
+        figure.savefig("solution_distribution.png") 
 
 
 class Instance:
@@ -174,6 +216,7 @@ class Instance:
 
 
 
-grasp = GRASP(Instance("pmed10.txt"), 0.5, 1000, "best_improvement")
+grasp = GRASP(Instance("pmed1.txt"), 0.5, 10000, "best_improvement")
 results = grasp.loop()
 print(results["solution"].fitness)
+grasp.plot_solution_distribution()
